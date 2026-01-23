@@ -77,7 +77,15 @@ VINS::VINS(const string &configfile, const string &outputpath, visual::VisualDra
     vector<double> distortion = config["visual"]["distortion"].as<std::vector<double>>();
     vector<int> resolution    = config["visual"]["resolution"].as<std::vector<int>>();
 
-    camera_ = visual::Camera::createCamera(intrinsic, distortion, resolution);
+    visual::Camera::ModelType type = visual::Camera::PINHOLE;
+    if (config["visual"]["camera_model"]) {
+        std::string model = config["visual"]["camera_model"].as<std::string>();
+        if (model == "kannala_brandt8") {
+            type = visual::Camera::KANNALA_BRANDT8;
+        }
+    }
+
+    camera_ = visual::Camera::createCamera(intrinsic, distortion, resolution, type);
 
     // Camera外参
     vecdata           = config["visual"]["q_b_c"].as<std::vector<double>>();

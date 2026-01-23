@@ -26,7 +26,7 @@
 #include "common/types.h"
 #include "le_vins/le_vins.h"
 
-#include <livox_ros_driver/CustomMsg.h>
+#include <livox_ros_driver2/CustomMsg.h>
 #include <ros/ros.h>
 #include <sensor_msgs/CompressedImage.h>
 #include <sensor_msgs/Image.h>
@@ -50,7 +50,7 @@ private:
     void imuCallback(const sensor_msgs::ImuConstPtr &imumsg);
     void imageCallback(const sensor_msgs::ImageConstPtr &imagemsg);
     void imageCallback(const sensor_msgs::CompressedImageConstPtr &imagemsg);
-    void livoxCallback(const livox_ros_driver::CustomMsgConstPtr &lidarmsg);
+    void livoxCallback(const livox_ros_driver2::CustomMsgConstPtr &lidarmsg);
     void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr &lidarmsg);
 
     void addImuData(const IMU &imu);
@@ -67,6 +67,7 @@ private:
 
     IMU imu_{.time = 0}, imu_pre_{.time = 0};
     double imu_data_dt_{0.005};
+    std::string imu_orientation_{"FRD"}; // Default to FRD
 
     bool use_compressed_image_{false};
 

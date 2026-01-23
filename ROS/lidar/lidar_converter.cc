@@ -32,7 +32,7 @@ LidarConverter::LidarConverter(double frame_rate, int scan_line, double nearest_
     farthest_square_distance_ = farthest_distance * farthest_distance;
 }
 
-size_t LidarConverter::livoxPointCloudConvertion(const livox_ros_driver::CustomMsgConstPtr &msg,
+size_t LidarConverter::livoxPointCloudConvertion(const livox_ros_driver2::CustomMsgConstPtr &msg,
                                                  PointCloudCustomPtr &pointcloud_raw,
                                                  PointCloudCustomPtr &pointcloud_ds, double &start, double &end,
                                                  bool to_gps_time) {
@@ -236,7 +236,7 @@ size_t LidarConverter::hesaiPointCloudConvertion(const sensor_msgs::PointCloud2C
     return pointcloud->size();
 }
 
-PointTypeCustom LidarConverter::livoxPointConvertion(const livox_ros_driver::CustomPoint &raw, uint64_t timebase,
+PointTypeCustom LidarConverter::livoxPointConvertion(const livox_ros_driver2::CustomPoint &raw, uint64_t timebase,
                                                      bool to_gps_time) {
     PointTypeCustom point;
 

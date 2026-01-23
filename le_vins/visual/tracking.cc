@@ -48,6 +48,23 @@ Tracking::Tracking(Camera::Ptr camera, VisualMap::Ptr map, VisualDrawer::Ptr dra
     is_use_visualization_   = config["is_use_visualization"].as<bool>();
     reprojection_error_std_ = config["optimizer"]["optimize_reprojection_std"].as<double>();
 
+    // 读入掩膜
+    if (config["visual"]["mask_file"]) {
+        std::string mask_file = config["visual"]["mask_file"].as<std::string>();
+        user_mask_            = cv::imread(mask_file, cv::IMREAD_GRAYSCALE);
+        if (!user_mask_.empty()) {
+            if (user_mask_.size() != camera_->size()) {
+                LOGE << "Mask size is not equal to camera size";
+                if (user_mask_.cols != camera_->width() || user_mask_.rows != camera_->height()) {
+                    cv::resize(user_mask_, user_mask_, camera_->size());
+                }
+            }
+            LOGI << "Load mask from " << mask_file;
+        } else {
+            LOGE << "Failed to load mask from " << mask_file;
+        }
+    }
+
     // 直方图均衡化
     clahe_ = cv::createCLAHE(3.0, cv::Size(21, 21));
 
@@ -292,7 +309,10 @@ void Tracking::showTracking() {
         return;
     }
 
-    visual_drawer_->updateFrame(frame_cur_);
+    cv::Mat undistorted_image;
+    camera_->undistortImage(frame_cur_->image(), undistorted_image);
+
+    visual_drawer_->updateFrame(frame_cur_, undistorted_image);
 }
 
 bool Tracking::depthAssociationProjection(PointCloud &pointcloud) {
@@ -668,19 +688,19 @@ bool Tracking::trackMappoint() {
 
     // 正向光流
     cv::calcOpticalFlowPyrLK(
-        frame_pre_->image(), frame_cur_->image(), pts2d_map, pts2d_matched, status, error, cv::Size(21, 21), 1,
+        frame_pre_->image(), frame_cur_->image(), pts2d_map, pts2d_matched, status, error, cv::Size(21, 21), 3,
         cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, TRACK_MAX_ITERATION, 0.01),
         cv::OPTFLOW_USE_INITIAL_FLOW);
     // 反向光流
     cv::calcOpticalFlowPyrLK(
         frame_cur_->image(), frame_pre_->image(), pts2d_matched, pts2d_reverse, status_reverse, error, cv::Size(21, 21),
-        1, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, TRACK_MAX_ITERATION, 0.01),
+        3, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, TRACK_MAX_ITERATION, 0.01),
         cv::OPTFLOW_USE_INITIAL_FLOW);
 
     // 跟踪失败的
     for (size_t k = 0; k < status.size(); k++) {
         if (status[k] && status_reverse[k] && !isOnBorder(pts2d_matched[k]) &&
-            (ptsDistance(pts2d_reverse[k], pts2d_map[k]) < 0.5)) {
+            (ptsDistance(pts2d_reverse[k], pts2d_map[k]) < 1.5)) {
             status[k] = 1;
         } else {
             status[k] = 0;
@@ -725,7 +745,8 @@ bool Tracking::trackMappoint() {
 
     // 路标点跟踪情况
     if (is_use_visualization_) {
-        visual_drawer_->updateTrackedMapPoints(pts2d_map, pts2d_matched, mappoint_type);
+        // 使用去畸变后的点进行绘图
+        visual_drawer_->updateTrackedMapPoints(pts2d_map_undis, pts2d_matched_undis, mappoint_type);
     }
 
     // LOGI << "Track " << tracked_mappoint_.size() << " map points";
@@ -844,7 +865,12 @@ bool Tracking::trackReferenceFrame() {
 
     // 从参考帧跟踪过来的新特征点
     if (is_use_visualization_) {
-        visual_drawer_->updateTrackedRefPoints(pts2d_ref_, pts2d_cur_);
+        // 使用去畸变后的点进行绘图
+        auto pts2d_ref_final_undis = pts2d_ref_;
+        auto pts2d_cur_final_undis = pts2d_cur_;
+        camera_->undistortPoints(pts2d_ref_final_undis);
+        camera_->undistortPoints(pts2d_cur_final_undis);
+        visual_drawer_->updateTrackedRefPoints(pts2d_ref_final_undis, pts2d_cur_final_undis);
     }
 
     // 用于下一帧的跟踪
@@ -890,6 +916,11 @@ void Tracking::featuresDetection(bool ismask) {
 
     // 设置感兴趣区域, 没有特征的区域
     Mat mask = Mat(camera_->size(), CV_8UC1, 255);
+
+    if (!user_mask_.empty()) {
+        cv::bitwise_and(mask, user_mask_, mask);
+    }
+
     if (ismask) {
         // 已经跟踪上的点
         for (auto &pt : frame_cur_->features()) {

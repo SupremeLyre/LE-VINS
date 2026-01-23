@@ -49,7 +49,7 @@ public:
     void updateMap(const Pose &pose) override;
 
     // 跟踪图像
-    void updateFrame(visual::VisualFrame::Ptr frame) override;
+    void updateFrame(visual::VisualFrame::Ptr frame, const cv::Mat &undistorted_image = cv::Mat()) override;
     void updateTrackedMapPoints(vector<cv::Point2f> map, vector<cv::Point2f> matched,
                                 vector<visual::MapPointType> mappoint_type) override;
     void updateTrackedRefPoints(vector<cv::Point2f> ref, vector<cv::Point2f> cur) override;
@@ -76,6 +76,7 @@ private:
     // 跟踪
     visual::VisualFrame::Ptr frame_;
     cv::Mat raw_image_;
+    cv::Mat undistorted_image_;
     cv::Mat track_image_;
     vector<Vector3d> fixed_mappoints_;
     vector<Vector3d> current_mappoints_;

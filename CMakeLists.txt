@@ -22,10 +22,10 @@ add_subdirectory(thirdparty/abseil-cpp-20230125.0)
 
 # ROS interface
 find_package(catkin REQUIRED COMPONENTS
-    message_generation roscpp std_msgs pcl_conversions livox_ros_driver)
+    message_generation roscpp std_msgs pcl_conversions livox_ros_driver2)
 catkin_package(
     LIBRARIES
-    CATKIN_DEPENDS roscpp std_msgs pcl_conversions livox_ros_driver)
+    CATKIN_DEPENDS roscpp std_msgs pcl_conversions livox_ros_driver2)
 include_directories(
     ${catkin_INCLUDE_DIRS})
 

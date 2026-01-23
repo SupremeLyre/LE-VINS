@@ -173,6 +173,8 @@ private:
     double reprojection_error_std_;
     bool is_use_visualization_;
 
+    cv::Mat user_mask_;
+
     double tracking_timecost_{0};
 };
 

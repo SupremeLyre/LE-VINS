@@ -103,6 +103,13 @@ void Fusion::run(const string &config_file) {
     double imu_data_rate = config["imu"]["imudatarate"].as<double>();
     imu_data_dt_         = 1.0 / imu_data_rate;
 
+    if (config["imu"]["imu_orientation"]) {
+        imu_orientation_ = config["imu"]["imu_orientation"].as<std::string>();
+        LOGI << "IMU orientation: " << imu_orientation_;
+    } else {
+        LOGI << "IMU orientation: Default (FRD)";
+    }
+
     // LiDAR参数
     is_use_lidar_depth_      = config["visual"]["is_use_lidar_depth"].as<bool>();
     lidar_type_              = config["lidar"]["lidar_type"].as<int>();
@@ -176,7 +183,7 @@ void Fusion::processSubscribe(const string &imu_topic, const string &image_topic
     ros::Subscriber lidar_sub;
     if (is_use_lidar_depth_) {
         if (lidar_type_ == Livox) {
-            lidar_sub = nh.subscribe<livox_ros_driver::CustomMsg>(lidar_topic, 10, &Fusion::livoxCallback, this);
+            lidar_sub = nh.subscribe<livox_ros_driver2::CustomMsg>(lidar_topic, 10, &Fusion::livoxCallback, this);
         } else {
             lidar_sub = nh.subscribe<sensor_msgs::PointCloud2>(lidar_topic, 10, &Fusion::pointCloudCallback, this);
         }
@@ -223,7 +230,7 @@ void Fusion::processRead(const string &imu_topic, const string &image_topic, con
             }
         } else if (is_use_lidar_depth_ && (msg.getTopic() == lidar_topic)) {
             if (lidar_type_ == Livox) {
-                livox_ros_driver::CustomMsgConstPtr livox_ptr = msg.instantiate<livox_ros_driver::CustomMsg>();
+                livox_ros_driver2::CustomMsgConstPtr livox_ptr = msg.instantiate<livox_ros_driver2::CustomMsg>();
                 livoxCallback(livox_ptr);
             } else {
                 sensor_msgs::PointCloud2ConstPtr points_ptr = msg.instantiate<sensor_msgs::PointCloud2>();
@@ -257,12 +264,50 @@ void Fusion::imuCallback(const sensor_msgs::ImuConstPtr &imumsg) {
     imu_.dt = imu_.time - imu_pre_.time;
 
     // IMU measurements, Front-Right-Down
-    imu_.dtheta[0] = imumsg->angular_velocity.x * imu_.dt;
-    imu_.dtheta[1] = imumsg->angular_velocity.y * imu_.dt;
-    imu_.dtheta[2] = imumsg->angular_velocity.z * imu_.dt;
-    imu_.dvel[0]   = imumsg->linear_acceleration.x * imu_.dt;
-    imu_.dvel[1]   = imumsg->linear_acceleration.y * imu_.dt;
-    imu_.dvel[2]   = imumsg->linear_acceleration.z * imu_.dt;
+    if (imu_orientation_ == "RFU") {
+        // RFU: X=Right, Y=Front, Z=Up
+        // FRD: Front(Y), Right(X), Down(-Z)
+        imu_.dtheta[0] = imumsg->angular_velocity.y * imu_.dt;
+        imu_.dtheta[1] = imumsg->angular_velocity.x * imu_.dt;
+        imu_.dtheta[2] = -imumsg->angular_velocity.z * imu_.dt;
+        imu_.dvel[0]   = imumsg->linear_acceleration.y * imu_.dt;
+        imu_.dvel[1]   = imumsg->linear_acceleration.x * imu_.dt;
+        imu_.dvel[2]   = -imumsg->linear_acceleration.z * imu_.dt;
+    } else if (imu_orientation_ == "FLU") {
+        // FLU: X=Front, Y=Left, Z=Up
+        // FRD: Front(X), Right(-Y), Down(-Z)
+        imu_.dtheta[0] = imumsg->angular_velocity.x * imu_.dt;
+        imu_.dtheta[1] = -imumsg->angular_velocity.y * imu_.dt;
+        imu_.dtheta[2] = -imumsg->angular_velocity.z * imu_.dt;
+        imu_.dvel[0]   = imumsg->linear_acceleration.x * imu_.dt;
+        imu_.dvel[1]   = -imumsg->linear_acceleration.y * imu_.dt;
+        imu_.dvel[2]   = -imumsg->linear_acceleration.z * imu_.dt;
+    } else if (imu_orientation_ == "FRD") {
+        // FRD: X=Front, Y=Right, Z=Down
+        // FRD: Front(X), Right(Y), Down(Z)
+        imu_.dtheta[0] = imumsg->angular_velocity.x * imu_.dt;
+        imu_.dtheta[1] = imumsg->angular_velocity.y * imu_.dt;
+        imu_.dtheta[2] = imumsg->angular_velocity.z * imu_.dt;
+        imu_.dvel[0]   = imumsg->linear_acceleration.x * imu_.dt;
+        imu_.dvel[1]   = imumsg->linear_acceleration.y * imu_.dt;
+        imu_.dvel[2]   = imumsg->linear_acceleration.z * imu_.dt;
+    } else if (imu_orientation_ == "LBU") {
+        // LBU to FRD
+        imu_.dtheta[0] = -imumsg->angular_velocity.y * imu_.dt;
+        imu_.dtheta[1] = -imumsg->angular_velocity.x * imu_.dt;
+        imu_.dtheta[2] = -imumsg->angular_velocity.z * imu_.dt;
+        imu_.dvel[0]   = -imumsg->linear_acceleration.y * imu_.dt;
+        imu_.dvel[1]   = -imumsg->linear_acceleration.x * imu_.dt;
+        imu_.dvel[2]   = -imumsg->linear_acceleration.z * imu_.dt;
+    } else {
+        // Default to FRD if unknown
+        imu_.dtheta[0] = imumsg->angular_velocity.x * imu_.dt;
+        imu_.dtheta[1] = imumsg->angular_velocity.y * imu_.dt;
+        imu_.dtheta[2] = imumsg->angular_velocity.z * imu_.dt;
+        imu_.dvel[0]   = imumsg->linear_acceleration.x * imu_.dt;
+        imu_.dvel[1]   = imumsg->linear_acceleration.y * imu_.dt;
+        imu_.dvel[2]   = imumsg->linear_acceleration.z * imu_.dt;
+    }
 
     // 数据未准备好
     if (imu_pre_.time == 0) {
@@ -349,7 +394,7 @@ void Fusion::imageCallback(const sensor_msgs::ImageConstPtr &imagemsg) {
     }
 }
 
-void Fusion::livoxCallback(const livox_ros_driver::CustomMsgConstPtr &lidarmsg) {
+void Fusion::livoxCallback(const livox_ros_driver2::CustomMsgConstPtr &lidarmsg) {
     PointCloudCustomPtr pointcloud_ds  = PointCloudCustomPtr(new PointCloudCustom);
     PointCloudCustomPtr pointcloud_raw = PointCloudCustomPtr(new PointCloudCustom);
     double start, end;

@@ -22,9 +22,10 @@
 
 namespace visual {
 
-Camera::Camera(Mat intrinsic, Mat distortion, const cv::Size &size)
+Camera::Camera(Mat intrinsic, Mat distortion, const cv::Size &size, ModelType type)
     : distortion_(std::move(distortion))
-    , intrinsic_(std::move(intrinsic)) {
+    , intrinsic_(std::move(intrinsic))
+    , type_(type) {
 
     fx_   = intrinsic_.at<double>(0, 0);
     skew_ = intrinsic_.at<double>(0, 1);
@@ -32,21 +33,32 @@ Camera::Camera(Mat intrinsic, Mat distortion, const cv::Size &size)
     fy_   = intrinsic_.at<double>(1, 1);
     cy_   = intrinsic_.at<double>(1, 2);
 
-    k1_ = distortion_.at<double>(0);
-    k2_ = distortion_.at<double>(1);
-    p1_ = distortion_.at<double>(2);
-    p2_ = distortion_.at<double>(3);
-    k3_ = distortion_.at<double>(4);
-
     width_  = size.width;
     height_ = size.height;
 
-    // 相机畸变矫正初始化
-    initUndistortRectifyMap(intrinsic_, distortion_, Mat(), intrinsic_, size, CV_16SC2, undissrc_, undisdst_);
+    if (type_ == PINHOLE) {
+        k1_ = distortion_.at<double>(0);
+        k2_ = distortion_.at<double>(1);
+        p1_ = distortion_.at<double>(2);
+        p2_ = distortion_.at<double>(3);
+        k3_ = distortion_.at<double>(4);
+
+        // 相机畸变矫正初始化
+        initUndistortRectifyMap(intrinsic_, distortion_, Mat(), intrinsic_, size, CV_16SC2, undissrc_, undisdst_);
+    } else if (type_ == KANNALA_BRANDT8) {
+        k1_ = distortion_.at<double>(0);
+        k2_ = distortion_.at<double>(1);
+        k3_ = distortion_.at<double>(2);
+        k4_ = distortion_.at<double>(3);
+
+        // 相机畸变矫正初始化
+        cv::fisheye::initUndistortRectifyMap(intrinsic_, distortion_, Mat(), intrinsic_, size, CV_16SC2, undissrc_,
+                                             undisdst_);
+    }
 }
 
 Camera::Ptr Camera::createCamera(const std::vector<double> &intrinsic, const std::vector<double> &distortion,
-                                 const std::vector<int> &size) {
+                                 const std::vector<int> &size, ModelType type) {
     // Intrinsic matrix
     Mat intrinsic_mat;
     if (intrinsic.size() == 4) {
@@ -59,32 +71,68 @@ Camera::Ptr Camera::createCamera(const std::vector<double> &intrinsic, const std
 
     // Distortion parameters
     Mat distortion_mat;
-    if (distortion.size() == 4) {
-        distortion_mat = (cv::Mat_<double>(5, 1) << distortion[0], distortion[1], distortion[2], distortion[3], 0.0);
-    } else if (distortion.size() == 5) {
-        distortion_mat =
-            (cv::Mat_<double>(5, 1) << distortion[0], distortion[1], distortion[2], distortion[3], distortion[4]);
+    if (type == PINHOLE) {
+        if (distortion.size() == 4) {
+            distortion_mat =
+                (cv::Mat_<double>(5, 1) << distortion[0], distortion[1], distortion[2], distortion[3], 0.0);
+        } else if (distortion.size() == 5) {
+            distortion_mat =
+                (cv::Mat_<double>(5, 1) << distortion[0], distortion[1], distortion[2], distortion[3], distortion[4]);
+        }
+    } else if (type == KANNALA_BRANDT8) {
+        if (distortion.size() == 4) {
+            distortion_mat = (cv::Mat_<double>(4, 1) << distortion[0], distortion[1], distortion[2], distortion[3]);
+        }
     }
 
-    return std::make_shared<Camera>(intrinsic_mat, distortion_mat, cv::Size(size[0], size[1]));
+    return std::make_shared<Camera>(intrinsic_mat, distortion_mat, cv::Size(size[0], size[1]), type);
 }
 
 void Camera::undistortPoints(std::vector<cv::Point2f> &pts) {
-    cv::undistortPoints(pts, pts, intrinsic_, distortion_, Mat(), intrinsic_);
+    if (type_ == PINHOLE) {
+        cv::undistortPoints(pts, pts, intrinsic_, distortion_, Mat(), intrinsic_);
+    } else if (type_ == KANNALA_BRANDT8) {
+        cv::fisheye::undistortPoints(pts, pts, intrinsic_, distortion_, Mat(), intrinsic_);
+    }
 }
 
 void Camera::distortPoints(std::vector<cv::Point2f> &pts) const {
-    for (auto &pt : pts) {
-        auto pc   = pixel2cam(pt);
-        double x  = pc.x();
-        double y  = pc.y();
-        double r2 = x * x + y * y;
-        double rr = (1 + k1_ * r2 + k2_ * r2 * r2 + k3_ * r2 * r2 * r2);
+    if (type_ == PINHOLE) {
+        for (auto &pt : pts) {
+            auto pc   = pixel2cam(pt);
+            double x  = pc.x();
+            double y  = pc.y();
+            double r2 = x * x + y * y;
+            double rr = (1 + k1_ * r2 + k2_ * r2 * r2 + k3_ * r2 * r2 * r2);
 
-        pc.x() = x * rr + 2 * p1_ * x * y + p2_ * (r2 + 2 * x * x);
-        pc.y() = y * rr + p1_ * (r2 + 2 * y * y) + 2 * p2_ * x * y;
+            pc.x() = x * rr + 2 * p1_ * x * y + p2_ * (r2 + 2 * x * x);
+            pc.y() = y * rr + p1_ * (r2 + 2 * y * y) + 2 * p2_ * x * y;
 
-        pt = cam2pixel(pc);
+            pt = cam2pixel(pc);
+        }
+    } else if (type_ == KANNALA_BRANDT8) {
+        for (auto &pt : pts) {
+            auto pc = pixel2cam(pt);
+            double x = pc.x();
+            double y = pc.y();
+            double r = std::sqrt(x * x + y * y);
+
+            if (r < 1e-8) {
+                pt = cam2pixel(pc);
+                continue;
+            }
+
+            double theta   = std::atan(r);
+            double theta2  = theta * theta;
+            double theta_d = theta * (1 + k1_ * theta2 + k2_ * theta2 * theta2 + k3_ * theta2 * theta2 * theta2 +
+                                      k4_ * theta2 * theta2 * theta2 * theta2);
+
+            double scale = theta_d / r;
+            pc.x()       = x * scale;
+            pc.y()       = y * scale;
+
+            pt = cam2pixel(pc);
+        }
     }
 }
 
@@ -93,10 +141,24 @@ void Camera::distortPoint(cv::Point2f &pp) const {
     double x  = pc.x();
     double y  = pc.y();
     double r2 = x * x + y * y;
-    double rr = (1 + k1_ * r2 + k2_ * r2 * r2 + k3_ * r2 * r2 * r2);
 
-    pc.x() = x * rr + 2 * p1_ * x * y + p2_ * (r2 + 2 * x * x);
-    pc.y() = y * rr + p1_ * (r2 + 2 * y * y) + 2 * p2_ * x * y;
+    if (type_ == PINHOLE) {
+        double rr = (1 + k1_ * r2 + k2_ * r2 * r2 + k3_ * r2 * r2 * r2);
+        pc.x()    = x * rr + 2 * p1_ * x * y + p2_ * (r2 + 2 * x * x);
+        pc.y()    = y * rr + p1_ * (r2 + 2 * y * y) + 2 * p2_ * x * y;
+    } else if (type_ == KANNALA_BRANDT8) {
+        double r = std::sqrt(r2);
+        if (r > 1e-8) {
+            double theta   = std::atan(r);
+            double theta2  = theta * theta;
+            double theta_d = theta * (1 + k1_ * theta2 + k2_ * theta2 * theta2 + k3_ * theta2 * theta2 * theta2 +
+                                      k4_ * theta2 * theta2 * theta2 * theta2);
+
+            double scale = theta_d / r;
+            pc.x()       = x * scale;
+            pc.y()       = y * scale;
+        }
+    }
 
     pp = cam2pixel(pc);
 }
@@ -107,10 +169,27 @@ cv::Point2f Camera::distortCameraPoint(const Vector3d &pc) const {
     double x  = pc.x() / pc.z();
     double y  = pc.y() / pc.z();
     double r2 = x * x + y * y;
-    double rr = (1 + k1_ * r2 + k2_ * r2 * r2 + k3_ * r2 * r2 * r2);
 
-    pc1.x() = static_cast<float>(x * rr + 2 * p1_ * x * y + p2_ * (r2 + 2 * x * x));
-    pc1.y() = static_cast<float>(y * rr + p1_ * (r2 + 2 * y * y) + 2 * p2_ * x * y);
+    if (type_ == PINHOLE) {
+        double rr = (1 + k1_ * r2 + k2_ * r2 * r2 + k3_ * r2 * r2 * r2);
+        pc1.x()   = static_cast<float>(x * rr + 2 * p1_ * x * y + p2_ * (r2 + 2 * x * x));
+        pc1.y()   = static_cast<float>(y * rr + p1_ * (r2 + 2 * y * y) + 2 * p2_ * x * y);
+    } else if (type_ == KANNALA_BRANDT8) {
+        double r = std::sqrt(r2);
+        if (r > 1e-8) {
+            double theta   = std::atan(r);
+            double theta2  = theta * theta;
+            double theta_d = theta * (1 + k1_ * theta2 + k2_ * theta2 * theta2 + k3_ * theta2 * theta2 * theta2 +
+                                      k4_ * theta2 * theta2 * theta2 * theta2);
+
+            double scale = theta_d / r;
+            pc1.x()      = static_cast<float>(x * scale);
+            pc1.y()      = static_cast<float>(y * scale);
+        } else {
+            pc1.x() = static_cast<float>(x);
+            pc1.y() = static_cast<float>(y);
+        }
+    }
     pc1.z() = 1.0;
 
     return cam2pixel(pc1);

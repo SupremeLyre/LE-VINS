@@ -38,12 +38,14 @@ class Camera {
 public:
     typedef std::shared_ptr<Camera> Ptr;
 
+    enum ModelType { PINHOLE, KANNALA_BRANDT8 };
+
     Camera() = delete;
 
-    Camera(Mat intrinsic, Mat distortion, const cv::Size &size);
+    Camera(Mat intrinsic, Mat distortion, const cv::Size &size, ModelType type = PINHOLE);
 
     static Camera::Ptr createCamera(const std::vector<double> &intrinsic, const std::vector<double> &distortion,
-                                    const std::vector<int> &size);
+                                    const std::vector<int> &size, ModelType type = PINHOLE);
 
     const Mat &cameraMatrix() {
         return intrinsic_;
@@ -88,10 +90,11 @@ private:
     Mat undissrc_, undisdst_;
 
     double fx_, fy_, cx_, cy_, skew_;
-    double k1_, k2_, k3_, p1_, p2_;
+    double k1_, k2_, k3_, k4_, p1_, p2_;
     Mat intrinsic_;
 
     int width_, height_;
+    ModelType type_;
 };
 
 } // namespace visual

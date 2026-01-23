@@ -75,10 +75,15 @@ void VisualDrawerRviz::run() {
     LOGI << "Visual drawer thread is exited";
 }
 
-void VisualDrawerRviz::updateFrame(visual::VisualFrame::Ptr frame) {
+void VisualDrawerRviz::updateFrame(visual::VisualFrame::Ptr frame, const cv::Mat &undistorted_image) {
     std::unique_lock<std::mutex> lock(image_mutex_);
 
     frame_ = frame;
+    if (!undistorted_image.empty()) {
+        undistorted_image.copyTo(undistorted_image_);
+    } else {
+        undistorted_image_ = cv::Mat();
+    }
 
     isframerdy_ = true;
     update_sem_.notify_one();
@@ -102,7 +107,11 @@ void VisualDrawerRviz::publishTrackingImage() {
     std::unique_lock<std::mutex> lock(image_mutex_);
 
     frame_->rawImage().copyTo(raw_image_);
-    frame_->image().copyTo(track_image_);
+    if (!undistorted_image_.empty()) {
+        undistorted_image_.copyTo(track_image_);
+    } else {
+        frame_->image().copyTo(track_image_);
+    }
 
     cv::Mat drawed;
     drawTrackingImage(track_image_, drawed);

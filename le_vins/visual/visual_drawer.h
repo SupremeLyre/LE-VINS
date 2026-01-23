@@ -44,7 +44,7 @@ public:
     virtual void updateMap(const Pose &pose)                      = 0;
 
     // 跟踪图像
-    virtual void updateFrame(VisualFrame::Ptr frame)                                        = 0;
+    virtual void updateFrame(VisualFrame::Ptr frame, const Mat &undistorted_image = Mat()) = 0;
     virtual void updateTrackedMapPoints(vector<cv::Point2f> map, vector<cv::Point2f> matched,
                                         vector<MapPointType> mappoint_type) = 0;
     virtual void updateTrackedRefPoints(vector<cv::Point2f> ref, vector<cv::Point2f> cur)   = 0;
