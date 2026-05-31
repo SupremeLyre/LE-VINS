@@ -22,6 +22,7 @@
 
 #include "common/earth.h"
 #include "common/gpstime.h"
+#include "common/imu_frame.h"
 #include "common/logging.h"
 #include "common/misc.h"
 #include "common/timecost.h"
@@ -89,10 +90,20 @@ VINS::VINS(const string &configfile, const string &outputpath, visual::VisualDra
 
     // Camera外参
     vecdata           = config["visual"]["q_b_c"].as<std::vector<double>>();
-    Quaterniond q_b_c = Eigen::Quaterniond(vecdata.data());
+    Quaterniond q_b_c = Eigen::Quaterniond(vecdata.data()).normalized();
     vecdata           = config["visual"]["t_b_c"].as<std::vector<double>>();
     Vector3d t_b_c    = Eigen::Vector3d(vecdata.data());
     td_b_c_           = config["visual"]["td_b_c"].as<double>();
+    bool is_extrinsic_in_raw_imu_frame =
+        config["visual"]["extrinsic_in_raw_imu_frame"] ? config["visual"]["extrinsic_in_raw_imu_frame"].as<bool>() : false;
+    if (is_extrinsic_in_raw_imu_frame) {
+        std::string imu_orientation = "FRD";
+        if (config["imu"]["imu_orientation"]) {
+            imu_orientation = config["imu"]["imu_orientation"].as<std::string>();
+        }
+        ImuFrame::transformCameraExtrinsicToFrd(imu_orientation, q_b_c, t_b_c);
+        LOGI << "Transform camera extrinsic from raw IMU frame " << imu_orientation << " to internal FRD frame";
+    }
 
     pose_b_c_.R = q_b_c.toRotationMatrix();
     pose_b_c_.t = t_b_c;

@@ -23,9 +23,11 @@
 
 #include "lidar/lidar.h"
 
-#include <livox_ros_driver2/CustomMsg.h>
-#include <livox_ros_driver2/CustomPoint.h>
-#include <sensor_msgs/PointCloud2.h>
+#include <livox_ros_driver2/msg/custom_msg.hpp>
+#include <livox_ros_driver2/msg/custom_point.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+
+#include <cstdint>
 
 using std::vector;
 
@@ -37,21 +39,22 @@ public:
     LidarConverter() = delete;
     LidarConverter(double frame_rate, int scan_line, double nearest_distance, double farthest_distance);
 
-    size_t livoxPointCloudConvertion(const livox_ros_driver2::CustomMsgConstPtr &msg,
+    size_t livoxPointCloudConvertion(const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr &msg,
                                      PointCloudCustomPtr &pointcloud_raw, PointCloudCustomPtr &pointcloud_ds,
                                      double &start, double &end, bool to_gps_time);
 
-    size_t velodynePointCloudConvertion(const sensor_msgs::PointCloud2ConstPtr &msg, PointCloudCustomPtr &pointcloud,
-                                        double &start, double &end, bool to_gps_time);
+    size_t velodynePointCloudConvertion(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg,
+                                        PointCloudCustomPtr &pointcloud, double &start, double &end,
+                                        bool to_gps_time);
 
-    size_t ousterPointCloudConvertion(const sensor_msgs::PointCloud2ConstPtr &msg, PointCloudCustomPtr &pointcloud,
-                                      double &start, double &end, bool to_gps_time);
+    size_t ousterPointCloudConvertion(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg,
+                                      PointCloudCustomPtr &pointcloud, double &start, double &end, bool to_gps_time);
 
-    size_t hesaiPointCloudConvertion(const sensor_msgs::PointCloud2ConstPtr &msg, PointCloudCustomPtr &pointcloud,
-                                     double &start, double &end, bool to_gps_time);
+    size_t hesaiPointCloudConvertion(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg,
+                                     PointCloudCustomPtr &pointcloud, double &start, double &end, bool to_gps_time);
 
 private:
-    static PointTypeCustom livoxPointConvertion(const livox_ros_driver2::CustomPoint &point, uint64_t timebase,
+    static PointTypeCustom livoxPointConvertion(const livox_ros_driver2::msg::CustomPoint &point, uint64_t timebase,
                                                 bool to_gps_time);
 
 private:

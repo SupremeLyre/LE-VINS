@@ -25,12 +25,12 @@
 #include <pcl/point_types.h>
 
 // Custom point type for undistortion
-struct PointXYZIT {
+struct EIGEN_ALIGN16 PointXYZIT {
     PCL_ADD_POINT4D;                // quad-word XYZ
     float intensity;                // point intensity
     double time;                    // point time
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW // ensure proper alignment
-} EIGEN_ALIGN16;
+};
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(PointXYZIT, (float, x, x)(float, y, y)(float, z, z)(float, intensity,
                                                                                       intensity)(double, time, time))
@@ -56,7 +56,7 @@ struct EIGEN_ALIGN16 OusterPoint {
     std::uint32_t range;
     std::uint8_t ring;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-} EIGEN_ALIGN16;
+};
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(OusterPoint, (float, x, x)(float, y, y)(float, z, z)(float, intensity, intensity)(
                                                    std::uint32_t, t, t)(std::uint16_t, reflectivity, reflectivity)(

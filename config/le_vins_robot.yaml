@@ -1,7 +1,7 @@
 # Configuration file for LE-VINS
 
 # 结果输出路径
-outputpath: "/root/datasets/ic-gvins_datasets/LE-VINS"
+outputpath: "/mnt/nvme1/datasets/ic-gvins_datasets/LE-VINS"
 is_make_outputdir: true
 
 # 是否开启可视化
@@ -16,7 +16,7 @@ ros:
 
     # 读取ROS包
     is_read_bag: false
-    bag_file: "/root/datasets/ic-gvins_datasets/building.bag"
+    bag_file: "/mnt/nvme1/datasets/ic-gvins_datasets/building.bag2"
 
 # IMU噪声建模参数
 imu:

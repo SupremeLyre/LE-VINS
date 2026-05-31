@@ -24,24 +24,34 @@
 #include "le_vins/common/timecost.h"
 
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <iostream>
 #include <memory>
+#include <thread>
+#include <vector>
 
 #include <absl/strings/numbers.h>
+#include <rclcpp/rclcpp.hpp>
 
 void sigintHandler(int sig);
 void checkStateThread(std::shared_ptr<Fusion> fusion);
 
 int main(int argc, char *argv[]) {
+    auto args = rclcpp::remove_ros_arguments(argc, argv);
+    if (args.size() < 2) {
+        std::cerr << "Usage: " << args[0] << " config_file [logtostderr]" << std::endl;
+        return 1;
+    }
+
     // 配置文件路径
-    string config_file(argv[1]);
+    string config_file(args[1]);
 
     // 命令行参数控制日志输出到标准输出
     bool logtostderr = false;
-    if (argc >= 3) {
+    if (args.size() >= 3) {
         int res;
-        if (absl::SimpleAtoi(argv[2], &res)) {
+        if (absl::SimpleAtoi(args[2], &res)) {
             logtostderr = (res == 1);
         }
     }
@@ -50,12 +60,13 @@ int main(int argc, char *argv[]) {
     Logging::initialization(argv, logtostderr, true);
 
     // ROS节点初始化
-    ros::init(argc, argv, "vins_node", ros::InitOption::NoSigintHandler | ros::InitOption::AnonymousName);
+    rclcpp::init(argc, argv, rclcpp::InitOptions(), rclcpp::SignalHandlerOptions::None);
 
     // 注册信号处理函数
     std::signal(SIGINT, sigintHandler);
 
-    auto fusion = std::make_shared<Fusion>();
+    auto node   = std::make_shared<rclcpp::Node>("vins_node");
+    auto fusion = std::make_shared<Fusion>(node);
 
     // 退出检测线程
     std::thread check_thread(checkStateThread, fusion);
@@ -65,6 +76,7 @@ int main(int argc, char *argv[]) {
     // 进入消息循环
     TimeCost timecost;
     fusion->run(config_file);
+    global_finished = true;
     check_thread.join();
     LOGI << "VINS process costs " << timecost.costInSecond() << " seconds";
 
@@ -84,7 +96,7 @@ void checkStateThread(std::shared_ptr<Fusion> fusion) {
 
     auto fusion_ptr = std::move(fusion);
     while (!global_finished) {
-        sleep(1);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     // 退出VINS处理线程
@@ -92,6 +104,8 @@ void checkStateThread(std::shared_ptr<Fusion> fusion) {
     std::cout << "VINS has been shutdown ..." << std::endl;
 
     // 关闭ROS
-    ros::shutdown();
+    if (rclcpp::ok()) {
+        rclcpp::shutdown();
+    }
     std::cout << "ROS node has been shutdown ..." << std::endl;
 }

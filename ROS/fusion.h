@@ -26,41 +26,44 @@
 #include "common/types.h"
 #include "le_vins/le_vins.h"
 
-#include <livox_ros_driver2/CustomMsg.h>
-#include <ros/ros.h>
-#include <sensor_msgs/CompressedImage.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/Imu.h>
-#include <sensor_msgs/NavSatFix.h>
+#include <livox_ros_driver2/msg/custom_msg.hpp>
 
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+
+#include <atomic>
 #include <memory>
+#include <queue>
 
 extern std::atomic<bool> global_finished;
 
 class Fusion {
 
 public:
-    Fusion() = default;
+    explicit Fusion(rclcpp::Node::SharedPtr node);
 
     void run(const string &config_file);
 
     void setFinished();
 
 private:
-    void imuCallback(const sensor_msgs::ImuConstPtr &imumsg);
-    void imageCallback(const sensor_msgs::ImageConstPtr &imagemsg);
-    void imageCallback(const sensor_msgs::CompressedImageConstPtr &imagemsg);
-    void livoxCallback(const livox_ros_driver2::CustomMsgConstPtr &lidarmsg);
-    void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr &lidarmsg);
+    void imuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr &imumsg);
+    void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &imagemsg);
+    void imageCallback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr &imagemsg);
+    void livoxCallback(const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr &lidarmsg);
+    void pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &lidarmsg);
 
     void addImuData(const IMU &imu);
 
-    void processSubscribe(const string &imu_topic, const string &image_topic, const string &lidar_topic,
-                          ros::NodeHandle &nh);
+    void processSubscribe(const string &imu_topic, const string &image_topic, const string &lidar_topic);
     void processRead(const string &imu_topic, const string &image_topic, const string &lidar_topic,
                      const string &bagfile);
 
 private:
+    rclcpp::Node::SharedPtr node_;
     std::shared_ptr<VINS> vins_;
 
     bool is_use_lidar_depth_{false};
@@ -76,6 +79,12 @@ private:
 
     LidarConverter::Ptr lidar_converter_;
     int lidar_type_;
+
+    rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr imu_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::CompressedImage>::SharedPtr compressed_image_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr lidar_sub_;
+    rclcpp::Subscription<livox_ros_driver2::msg::CustomMsg>::SharedPtr livox_sub_;
 };
 
 #endif // FUSION_ROS_H

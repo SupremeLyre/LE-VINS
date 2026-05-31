@@ -21,38 +21,67 @@ add_subdirectory(thirdparty/abseil-cpp-20230125.0)
 ## Executable
 
 # ROS interface
-find_package(catkin REQUIRED COMPONENTS
-    message_generation roscpp std_msgs pcl_conversions livox_ros_driver2)
-catkin_package(
-    LIBRARIES
-    CATKIN_DEPENDS roscpp std_msgs pcl_conversions livox_ros_driver2)
-include_directories(
-    ${catkin_INCLUDE_DIRS})
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(rosbag2_cpp REQUIRED)
+find_package(rosbag2_storage REQUIRED)
+find_package(livox_ros_driver2 REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 # LE-VINS ROS
-include_directories(
-    ${PROJECT_SOURCE_DIR}
-    ${PROJECT_SOURCE_DIR}/le_vins)
 add_executable(${PROJECT_NAME}_ros
     ROS/main.cc
     ROS/fusion.cc
     ROS/visual/visual_drawer_rviz.cc
     ROS/lidar/lidar_converter.cc)
 
-add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_include_directories(${PROJECT_NAME}_ros PRIVATE
+    ${PROJECT_SOURCE_DIR}
+    ${PROJECT_SOURCE_DIR}/le_vins)
+ament_target_dependencies(${PROJECT_NAME}_ros
+    rclcpp
+    sensor_msgs
+    nav_msgs
+    geometry_msgs
+    pcl_conversions
+    rosbag2_cpp
+    rosbag2_storage
+    tf2_ros)
+
+ament_target_dependencies(${PROJECT_NAME}_ros livox_ros_driver2)
+
 target_link_libraries(${PROJECT_NAME}_ros
-    ${catkin_LIBRARIES}
-    le_vins
-    stdc++fs)
+    le_vins)
 
 # PCL
 find_package(PCL REQUIRED)
-include_directories(${PCL_INCLUDE_DIRS})
-link_directories(${PCL_LIBRARY_DIRS})
-add_definitions(${PCL_DEFINITIONS})
+target_include_directories(${PROJECT_NAME}_ros PRIVATE ${PCL_INCLUDE_DIRS})
+target_compile_definitions(${PROJECT_NAME}_ros PRIVATE ${PCL_DEFINITIONS})
 target_link_libraries(${PROJECT_NAME}_ros ${PCL_LIBRARIES})
 
 # abseil
 target_link_libraries(${PROJECT_NAME}_ros
     absl::strings
     absl::time)
+
+install(TARGETS ${PROJECT_NAME}_ros
+    DESTINATION lib/${PROJECT_NAME})
+install(TARGETS
+    le_vins
+    fileio
+    preintegration
+    visual
+    lidar
+    factors
+    common
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin)
+install(DIRECTORY config launch
+    DESTINATION share/${PROJECT_NAME})
+
+ament_package()

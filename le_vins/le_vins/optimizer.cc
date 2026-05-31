@@ -20,6 +20,7 @@
 
 #include "le_vins/optimizer.h"
 
+#include "common/imu_frame.h"
 #include "common/logging.h"
 #include "common/misc.h"
 #include "common/timecost.h"
@@ -79,6 +80,17 @@ Optimizer::Optimizer(const string &configfile, std::shared_ptr<IntegrationParame
     vecdata             = config["visual"]["t_b_c"].as<vector<double>>();
     Vector3d t_b_c      = Eigen::Vector3d(vecdata.data());
     double td_b_c       = config["visual"]["td_b_c"].as<double>();
+    bool is_extrinsic_in_raw_imu_frame =
+        config["visual"]["extrinsic_in_raw_imu_frame"] ? config["visual"]["extrinsic_in_raw_imu_frame"].as<bool>() : false;
+    if (is_extrinsic_in_raw_imu_frame) {
+        std::string imu_orientation = "FRD";
+        if (config["imu"]["imu_orientation"]) {
+            imu_orientation = config["imu"]["imu_orientation"].as<std::string>();
+        }
+        ImuFrame::transformCameraExtrinsicToFrd(imu_orientation, q_b_c, t_b_c);
+        LOGI << "Transform optimizer camera extrinsic from raw IMU frame " << imu_orientation
+             << " to internal FRD frame";
+    }
 
     memcpy(extrinsic_b_c_, t_b_c.data(), sizeof(double) * 3);
     memcpy(extrinsic_b_c_ + 3, q_b_c.coeffs().data(), sizeof(double) * 4); // x, y, z, w

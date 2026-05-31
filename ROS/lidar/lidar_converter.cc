@@ -23,7 +23,22 @@
 #include "common/gpstime.h"
 #include "common/logging.h"
 
+#include <builtin_interfaces/msg/time.hpp>
+#include <cfloat>
+#include <cstdint>
 #include <pcl_conversions/pcl_conversions.h>
+
+namespace {
+
+double stampToSec(const builtin_interfaces::msg::Time &stamp) {
+    return static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1.0e-9;
+}
+
+uint64_t stampToNanosec(const builtin_interfaces::msg::Time &stamp) {
+    return static_cast<uint64_t>(stamp.sec) * 1000000000ULL + static_cast<uint64_t>(stamp.nanosec);
+}
+
+} // namespace
 
 LidarConverter::LidarConverter(double frame_rate, int scan_line, double nearest_distance, double farthest_distance)
     : scan_line_(scan_line) {
@@ -32,7 +47,7 @@ LidarConverter::LidarConverter(double frame_rate, int scan_line, double nearest_
     farthest_square_distance_ = farthest_distance * farthest_distance;
 }
 
-size_t LidarConverter::livoxPointCloudConvertion(const livox_ros_driver2::CustomMsgConstPtr &msg,
+size_t LidarConverter::livoxPointCloudConvertion(const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr &msg,
                                                  PointCloudCustomPtr &pointcloud_raw,
                                                  PointCloudCustomPtr &pointcloud_ds, double &start, double &end,
                                                  bool to_gps_time) {
@@ -42,7 +57,7 @@ size_t LidarConverter::livoxPointCloudConvertion(const livox_ros_driver2::Custom
     pointcloud_ds->reserve(msg->points.size());
 
     // 使用统一的时间
-    uint64_t timebase = msg->header.stamp.toNSec();
+    uint64_t timebase = stampToNanosec(msg->header.stamp);
 
     int num_points = 0;
     int filter_num = point_filter_num_;
@@ -80,7 +95,7 @@ size_t LidarConverter::livoxPointCloudConvertion(const livox_ros_driver2::Custom
     return pointcloud_ds->size();
 }
 
-size_t LidarConverter::velodynePointCloudConvertion(const sensor_msgs::PointCloud2ConstPtr &msg,
+size_t LidarConverter::velodynePointCloudConvertion(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg,
                                                     PointCloudCustomPtr &pointcloud, double &start, double &end,
                                                     bool to_gps_time) {
     pointcloud->clear();
@@ -89,7 +104,7 @@ size_t LidarConverter::velodynePointCloudConvertion(const sensor_msgs::PointClou
     pcl::fromROSMsg(*msg, pointcloud_raw);
 
     // 数据包时间
-    double stamp = msg->header.stamp.toSec();
+    double stamp = stampToSec(msg->header.stamp);
     if (to_gps_time) {
         int week;
         double sow;
@@ -129,7 +144,7 @@ size_t LidarConverter::velodynePointCloudConvertion(const sensor_msgs::PointClou
     return pointcloud->size();
 }
 
-size_t LidarConverter::ousterPointCloudConvertion(const sensor_msgs::PointCloud2ConstPtr &msg,
+size_t LidarConverter::ousterPointCloudConvertion(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg,
                                                   PointCloudCustomPtr &pointcloud, double &start, double &end,
                                                   bool to_gps_time) {
     pointcloud->clear();
@@ -138,7 +153,7 @@ size_t LidarConverter::ousterPointCloudConvertion(const sensor_msgs::PointCloud2
     pcl::fromROSMsg(*msg, pointcloud_raw);
 
     // 数据包时间
-    double stamp = msg->header.stamp.toSec();
+    double stamp = stampToSec(msg->header.stamp);
     if (to_gps_time) {
         int week;
         double sow;
@@ -178,7 +193,7 @@ size_t LidarConverter::ousterPointCloudConvertion(const sensor_msgs::PointCloud2
     return pointcloud->size();
 }
 
-size_t LidarConverter::hesaiPointCloudConvertion(const sensor_msgs::PointCloud2ConstPtr &msg,
+size_t LidarConverter::hesaiPointCloudConvertion(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg,
                                                  PointCloudCustomPtr &pointcloud, double &start, double &end,
                                                  bool to_gps_time) {
     pointcloud->clear();
@@ -187,7 +202,7 @@ size_t LidarConverter::hesaiPointCloudConvertion(const sensor_msgs::PointCloud2C
     pcl::fromROSMsg(*msg, pointcloud_raw);
 
     // 数据包时间
-    double stamp = msg->header.stamp.toSec();
+    double stamp = stampToSec(msg->header.stamp);
     if (to_gps_time) {
         int week;
         double sow;
@@ -236,7 +251,7 @@ size_t LidarConverter::hesaiPointCloudConvertion(const sensor_msgs::PointCloud2C
     return pointcloud->size();
 }
 
-PointTypeCustom LidarConverter::livoxPointConvertion(const livox_ros_driver2::CustomPoint &raw, uint64_t timebase,
+PointTypeCustom LidarConverter::livoxPointConvertion(const livox_ros_driver2::msg::CustomPoint &raw, uint64_t timebase,
                                                      bool to_gps_time) {
     PointTypeCustom point;
 

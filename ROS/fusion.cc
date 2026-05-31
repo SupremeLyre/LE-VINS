@@ -28,14 +28,41 @@
 
 #include <absl/time/clock.h>
 #include <absl/time/time.h>
+#include <builtin_interfaces/msg/time.hpp>
+#include <chrono>
 #include <filesystem>
-#include <sensor_msgs/image_encodings.h>
+#include <functional>
+#include <rclcpp/serialization.hpp>
+#include <rclcpp/serialized_message.hpp>
+#include <rosbag2_cpp/reader.hpp>
+#include <rosbag2_storage/serialized_bag_message.hpp>
+#include <rosbag2_storage/storage_filter.hpp>
+#include <sensor_msgs/image_encodings.hpp>
+#include <thread>
+#include <utility>
 #include <yaml-cpp/yaml.h>
 
-#include <rosbag/bag.h>
-#include <rosbag/view.h>
-
 std::atomic<bool> global_finished = false;
+
+namespace {
+
+double stampToSec(const builtin_interfaces::msg::Time &stamp) {
+    return static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1.0e-9;
+}
+
+template <typename MessageT>
+std::shared_ptr<MessageT> deserializeBagMessage(const rosbag2_storage::SerializedBagMessage &bag_message) {
+    rclcpp::SerializedMessage serialized_msg(*bag_message.serialized_data);
+    auto message = std::make_shared<MessageT>();
+    rclcpp::Serialization<MessageT> serialization;
+    serialization.deserialize_message(&serialized_msg, message.get());
+    return message;
+}
+
+} // namespace
+
+Fusion::Fusion(rclcpp::Node::SharedPtr node)
+    : node_(std::move(node)) {}
 
 void Fusion::setFinished() {
     if (vins_) {
@@ -44,10 +71,6 @@ void Fusion::setFinished() {
 }
 
 void Fusion::run(const string &config_file) {
-    // ROS Handle
-    ros::NodeHandle nh;
-    ros::NodeHandle pnh("~");
-
     // 加载配置
     YAML::Node config;
     try {
@@ -72,14 +95,10 @@ void Fusion::run(const string &config_file) {
     bool is_read_bag = config["ros"]["is_read_bag"].as<bool>();
     string bag_file  = config["ros"]["bag_file"].as<string>();
     // ROS具有高优先级, 重置配置文件的ROS读取配置
-    bool is_read_bag_ros;
-    if (pnh.param<bool>("is_read_bag", is_read_bag_ros, false)) {
-        is_read_bag = is_read_bag_ros;
-        string bag_file_ros;
-        pnh.param<string>("bagfile", bag_file_ros, "");
-        if (bag_file_ros.compare("") != 0) {
-            bag_file = bag_file_ros;
-        }
+    is_read_bag       = node_->declare_parameter<bool>("is_read_bag", is_read_bag);
+    string bag_file_ros = node_->declare_parameter<string>("bagfile", bag_file);
+    if (!bag_file_ros.empty()) {
+        bag_file = bag_file_ros;
     }
 
     // 如果文件夹不存在, 尝试创建
@@ -143,7 +162,7 @@ void Fusion::run(const string &config_file) {
     VisualDrawerRviz::Ptr visual_drawer = nullptr;
     bool is_use_visualization_          = config["is_use_visualization"].as<bool>();
     if (is_use_visualization_) {
-        visual_drawer = std::make_shared<VisualDrawerRviz>(nh);
+        visual_drawer = std::make_shared<VisualDrawerRviz>(node_);
     }
     vins_ = std::make_shared<VINS>(config_file, outputpath, visual_drawer);
 
@@ -162,37 +181,44 @@ void Fusion::run(const string &config_file) {
         // 结束处理
         global_finished = true;
     } else {
-        processSubscribe(imu_topic, image_topic, lidar_topic, nh);
+        processSubscribe(imu_topic, image_topic, lidar_topic);
     }
 }
 
-void Fusion::processSubscribe(const string &imu_topic, const string &image_topic, const string &lidar_topic,
-                              ros::NodeHandle &nh) {
+void Fusion::processSubscribe(const string &imu_topic, const string &image_topic, const string &lidar_topic) {
     //  IMU
-    ros::Subscriber imu_sub = nh.subscribe<sensor_msgs::Imu>(imu_topic, 200, &Fusion::imuCallback, this);
+    imu_sub_ = node_->create_subscription<sensor_msgs::msg::Imu>(
+        imu_topic, rclcpp::SensorDataQoS().keep_last(200),
+        [this](const sensor_msgs::msg::Imu::ConstSharedPtr msg) { imuCallback(msg); });
 
     // Visual image
-    ros::Subscriber image_sub;
     if (use_compressed_image_) {
-        image_sub = nh.subscribe<sensor_msgs::CompressedImage>(image_topic, 20, &Fusion::imageCallback, this);
+        compressed_image_sub_ = node_->create_subscription<sensor_msgs::msg::CompressedImage>(
+            image_topic, rclcpp::SensorDataQoS().keep_last(20),
+            [this](const sensor_msgs::msg::CompressedImage::ConstSharedPtr msg) { imageCallback(msg); });
     } else {
-        image_sub = nh.subscribe<sensor_msgs::Image>(image_topic, 20, &Fusion::imageCallback, this);
+        image_sub_ = node_->create_subscription<sensor_msgs::msg::Image>(
+            image_topic, rclcpp::SensorDataQoS().keep_last(20),
+            [this](const sensor_msgs::msg::Image::ConstSharedPtr msg) { imageCallback(msg); });
     }
 
     // Lidar
-    ros::Subscriber lidar_sub;
     if (is_use_lidar_depth_) {
         if (lidar_type_ == Livox) {
-            lidar_sub = nh.subscribe<livox_ros_driver2::CustomMsg>(lidar_topic, 10, &Fusion::livoxCallback, this);
+            livox_sub_ = node_->create_subscription<livox_ros_driver2::msg::CustomMsg>(
+                lidar_topic, rclcpp::SensorDataQoS().keep_last(10),
+                [this](const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr msg) { livoxCallback(msg); });
         } else {
-            lidar_sub = nh.subscribe<sensor_msgs::PointCloud2>(lidar_topic, 10, &Fusion::pointCloudCallback, this);
+            lidar_sub_ = node_->create_subscription<sensor_msgs::msg::PointCloud2>(
+                lidar_topic, rclcpp::SensorDataQoS().keep_last(10),
+                [this](const sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) { pointCloudCallback(msg); });
         }
     }
 
     LOGI << "Waiting ROS message...";
 
     // Enter message loopback
-    ros::spin();
+    rclcpp::spin(node_);
 }
 
 void Fusion::processRead(const string &imu_topic, const string &image_topic, const string &lidar_topic,
@@ -201,15 +227,23 @@ void Fusion::processRead(const string &imu_topic, const string &image_topic, con
     vector<string> topics;
     topics.emplace_back(imu_topic);
     topics.emplace_back(image_topic);
-    topics.emplace_back(lidar_topic);
+    if (is_use_lidar_depth_) {
+        topics.emplace_back(lidar_topic);
+    }
 
     // 遍历ROS包
-    rosbag::Bag bag(bagfile);
-    rosbag::View view(bag, rosbag::TopicQuery(topics));
-    for (rosbag::MessageInstance const &msg : view) {
+    rosbag2_cpp::Reader reader;
+    reader.open(bagfile);
+    rosbag2_storage::StorageFilter filter;
+    filter.topics = topics;
+    reader.set_filter(filter);
+
+    while (reader.has_next()) {
+        auto msg = reader.read_next();
+
         // 等待数据处理完毕
         while (!global_finished && !vins_->canAddData()) {
-            usleep(100);
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
 
         // 强制退出信号
@@ -217,23 +251,23 @@ void Fusion::processRead(const string &imu_topic, const string &image_topic, con
             return;
         }
 
-        if (msg.getTopic() == imu_topic) {
-            sensor_msgs::ImuConstPtr imumsg = msg.instantiate<sensor_msgs::Imu>();
+        if (msg->topic_name == imu_topic) {
+            auto imumsg = deserializeBagMessage<sensor_msgs::msg::Imu>(*msg);
             imuCallback(imumsg);
-        } else if (msg.getTopic() == image_topic) {
+        } else if (msg->topic_name == image_topic) {
             if (use_compressed_image_) {
-                sensor_msgs::CompressedImagePtr imagemsg = msg.instantiate<sensor_msgs::CompressedImage>();
+                auto imagemsg = deserializeBagMessage<sensor_msgs::msg::CompressedImage>(*msg);
                 imageCallback(imagemsg);
             } else {
-                sensor_msgs::ImageConstPtr imagemsg = msg.instantiate<sensor_msgs::Image>();
+                auto imagemsg = deserializeBagMessage<sensor_msgs::msg::Image>(*msg);
                 imageCallback(imagemsg);
             }
-        } else if (is_use_lidar_depth_ && (msg.getTopic() == lidar_topic)) {
+        } else if (is_use_lidar_depth_ && (msg->topic_name == lidar_topic)) {
             if (lidar_type_ == Livox) {
-                livox_ros_driver2::CustomMsgConstPtr livox_ptr = msg.instantiate<livox_ros_driver2::CustomMsg>();
+                auto livox_ptr = deserializeBagMessage<livox_ros_driver2::msg::CustomMsg>(*msg);
                 livoxCallback(livox_ptr);
             } else {
-                sensor_msgs::PointCloud2ConstPtr points_ptr = msg.instantiate<sensor_msgs::PointCloud2>();
+                auto points_ptr = deserializeBagMessage<sensor_msgs::msg::PointCloud2>(*msg);
                 pointCloudCallback(points_ptr);
             }
         }
@@ -242,7 +276,7 @@ void Fusion::processRead(const string &imu_topic, const string &image_topic, con
     // 等待数据处理结束
     int sec_cnts = 0;
     while (!vins_->isBufferEmpty()) {
-        sleep(1);
+        std::this_thread::sleep_for(std::chrono::seconds(1));
         if (sec_cnts++ > 20) {
             LOGW << "Waiting vins processing timeout";
             break;
@@ -250,11 +284,11 @@ void Fusion::processRead(const string &imu_topic, const string &image_topic, con
     }
 }
 
-void Fusion::imuCallback(const sensor_msgs::ImuConstPtr &imumsg) {
+void Fusion::imuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr &imumsg) {
     imu_pre_ = imu_;
 
     // Time convertion
-    double unixsecond = imumsg->header.stamp.toSec();
+    double unixsecond = stampToSec(imumsg->header.stamp);
     double weeksec;
     int week;
     GpsTime::unix2gps(unixsecond, week, weeksec);
@@ -332,14 +366,14 @@ void Fusion::addImuData(const IMU &imu) {
     }
 }
 
-void Fusion::imageCallback(const sensor_msgs::CompressedImageConstPtr &imagemsg) {
+void Fusion::imageCallback(const sensor_msgs::msg::CompressedImage::ConstSharedPtr &imagemsg) {
     cv::Mat image;
 
     vector<uint8_t> buffer(imagemsg->data);
     image = cv::imdecode(buffer, cv::IMREAD_COLOR);
 
     // Time convertion
-    double unixsecond = imagemsg->header.stamp.toSec();
+    double unixsecond = stampToSec(imagemsg->header.stamp);
     double weeksec;
     int week;
     GpsTime::unix2gps(unixsecond, week, weeksec);
@@ -358,7 +392,7 @@ void Fusion::imageCallback(const sensor_msgs::CompressedImageConstPtr &imagemsg)
     }
 }
 
-void Fusion::imageCallback(const sensor_msgs::ImageConstPtr &imagemsg) {
+void Fusion::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &imagemsg) {
     cv::Mat image;
 
     // 构造图像
@@ -375,7 +409,7 @@ void Fusion::imageCallback(const sensor_msgs::ImageConstPtr &imagemsg) {
     }
 
     // Time convertion
-    double unixsecond = imagemsg->header.stamp.toSec();
+    double unixsecond = stampToSec(imagemsg->header.stamp);
     double weeksec;
     int week;
     GpsTime::unix2gps(unixsecond, week, weeksec);
@@ -394,7 +428,7 @@ void Fusion::imageCallback(const sensor_msgs::ImageConstPtr &imagemsg) {
     }
 }
 
-void Fusion::livoxCallback(const livox_ros_driver2::CustomMsgConstPtr &lidarmsg) {
+void Fusion::livoxCallback(const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr &lidarmsg) {
     PointCloudCustomPtr pointcloud_ds  = PointCloudCustomPtr(new PointCloudCustom);
     PointCloudCustomPtr pointcloud_raw = PointCloudCustomPtr(new PointCloudCustom);
     double start, end;
@@ -405,7 +439,7 @@ void Fusion::livoxCallback(const livox_ros_driver2::CustomMsgConstPtr &lidarmsg)
     vins_->addNewPointCloud(pointcloud_raw);
 }
 
-void Fusion::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr &lidarmsg) {
+void Fusion::pointCloudCallback(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &lidarmsg) {
     PointCloudCustomPtr pointcloud = PointCloudCustomPtr(new PointCloudCustom);
     double start = 0, end = 0;
 

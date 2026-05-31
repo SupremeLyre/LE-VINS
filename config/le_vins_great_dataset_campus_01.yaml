@@ -1,0 +1,85 @@
+# Configuration file for LE-VINS
+
+# 结果输出路径
+outputpath: "/mnt/nvme1/datasets/GREAT-Dataset/campus-01/LE-VINS"
+is_make_outputdir: true
+
+# 是否开启可视化
+is_use_visualization: true
+
+# ROS接口配置
+ros:
+    imu_topic: "/imu_raw"
+    image_topic: "/img0_raw"
+    lidar_topic: "/points_raw"
+    use_compressed_image: false # 使用压缩图像
+
+    # 读取ROS包
+    is_read_bag: true
+    bag_file: "/mnt/nvme1/datasets/GREAT-Dataset/campus-01/campus-01.bag2"
+
+# IMU噪声建模参数
+imu:
+    imudatarate: 100 # IMU原始数据频率, Hz
+    is_use_zupt: true # 使用零速检测和零速约束
+    imu_orientation: "RFU" # IMU坐标系方向: LBU (Left-Bottom-Up), FRD (Front-Right-Down)
+
+    arw: 0.29 # deg/sqrt(hr)
+    vrw: 0.30 # m/s/sqrt(hr)
+    gbstd: 3.6 # deg/hr
+    abstd: 3.6 # mGal
+    corrtime: 1.0 # hr
+
+    gb_prior_std: 120 # deg/hr
+    ab_prior_std: 5000 # mGal
+
+# 优化器
+optimizer:
+    optimize_reprojection_std: 1.5 # 像素重投影误差
+    optimize_point_to_plane_std: 0.1 # 点到面观测协方差, m
+    optimize_window_size: 10 # 滑动窗口大小
+
+    optimize_estimate_cam_extrinsic: true # 是否估计相机和IMU的外参
+    optimize_estimate_cam_td: true # 是否估计相机和IMU之间的时间间隔
+    optimize_cam_extrinsic_accurate: false # 相机和IMU的外参初值准确
+
+visual:
+    is_use_lidar_depth: false # 使用激光深度增强
+    track_max_features: 150 # 最大提取特征数量
+
+    # 内参 [fx, fy, cx, cy(, skew)]
+    intrinsic: [1155.3798161925529, 1157.6537409838597, 514.5749725873566, 398.0837659988261]
+
+    # 畸变参数 [k1, k2, p1, p2(, k3)]
+    distortion: [-0.08116121408175185, 0.3634445516554271, 0.00015894104082034115,
+        0.0007295381347354688]
+
+    # 图像分辨率
+    resolution: [1024, 768]
+
+    # 相机IMU外参 Pb = q_b_c * Pc + t_b_c
+    # true: q_b_c/t_b_c is calibrated in the raw IMU frame and will be converted to internal FRD.
+    extrinsic_in_raw_imu_frame: true
+    # q (x, y, z, w)
+    q_b_c: [-0.701039936007847, -0.00315801794262976, 0.000220872323511978, 0.713114988105148]
+    t_b_c: [-0.1533, 0.1960, 0.0535]
+
+    # IMU和相机时间延时
+    # t_b = t_c + td
+    td_b_c: 0.0
+
+    # 激光相机外参 Pc = q_c_l * Pl + t_c_l
+    # q (x, y, z, w)
+    q_c_l: [-0.4999, -0.4896, -0.5056, 0.5048]
+    t_c_l: [-0.0849, 0.1909, -0.4160]
+
+    # t_b = t_l + td
+    td_b_l: 0.0
+
+lidar:
+    # 激光参数
+    lidar_type: 2 # Livox: 1; Velodyne: 2; Ouster: 3; Hesai: 4
+    scan_line: 16 # 扫描线数
+    nearest_distance: 1 # 扫描盲区, m
+    farthest_distance: 100.0 # 最远距离, m
+    frame_rate: 10 # 帧率, Hz
