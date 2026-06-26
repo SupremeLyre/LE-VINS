@@ -22,7 +22,7 @@ def generate_launch_description():
                 executable="le_vins_ros",
                 name="le_vins_ros",
                 output="screen",
-                arguments=[configfile, "0"],
+                arguments=[configfile, "1"],
                 parameters=[{"is_read_bag": False}],
                 on_exit=Shutdown(),
             ),

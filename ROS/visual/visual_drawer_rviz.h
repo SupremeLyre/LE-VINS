@@ -76,6 +76,7 @@ private:
     std::atomic<bool> is_finished_;
     std::atomic<bool> isframerdy_;
     std::atomic<bool> ismaprdy_;
+    std::atomic<bool> has_frame_;
 
     // 跟踪
     visual::VisualFrame::Ptr frame_;

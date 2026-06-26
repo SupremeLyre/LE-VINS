@@ -24,14 +24,14 @@ imu:
     is_use_zupt: true # 使用零速检测和零速约束
     imu_orientation: "RFU" # IMU坐标系方向: LBU (Left-Bottom-Up), FRD (Front-Right-Down)
 
-    arw: 0.29 # deg/sqrt(hr)
-    vrw: 0.30 # m/s/sqrt(hr)
-    gbstd: 3.6 # deg/hr
-    abstd: 3.6 # mGal
+    arw: 0.3 # deg/sqrt(hr)
+    vrw: 0.5 # m/s/sqrt(hr)
+    gbstd: 10.0 # deg/hr
+    abstd: 150.0 # mGal
     corrtime: 1.0 # hr
 
-    gb_prior_std: 120 # deg/hr
-    ab_prior_std: 5000 # mGal
+    gb_prior_std: 1500 # deg/hr
+    ab_prior_std: 10000 # mGal
 
 # 优化器
 optimizer:
@@ -41,11 +41,11 @@ optimizer:
 
     optimize_estimate_cam_extrinsic: true # 是否估计相机和IMU的外参
     optimize_estimate_cam_td: true # 是否估计相机和IMU之间的时间间隔
-    optimize_cam_extrinsic_accurate: false # 相机和IMU的外参初值准确
+    optimize_cam_extrinsic_accurate: true # 相机和IMU的外参初值准确
 
 visual:
     is_use_lidar_depth: false # 使用激光深度增强
-    track_max_features: 150 # 最大提取特征数量
+    track_max_features: 250 # 最大提取特征数量
 
     # 内参 [fx, fy, cx, cy(, skew)]
     intrinsic: [1155.3798161925529, 1157.6537409838597, 514.5749725873566, 398.0837659988261]
@@ -62,7 +62,7 @@ visual:
     extrinsic_in_raw_imu_frame: true
     # q (x, y, z, w)
     q_b_c: [-0.701039936007847, -0.00315801794262976, 0.000220872323511978, 0.713114988105148]
-    t_b_c: [-0.1533, 0.1960, 0.0535]
+    t_b_c: [0.1533, -0.1960, -0.0535]
 
     # IMU和相机时间延时
     # t_b = t_c + td

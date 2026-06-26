@@ -24,14 +24,14 @@ imu:
     is_use_zupt: true # 使用零速检测和零速约束
     imu_orientation: "LBU" # IMU坐标系方向: LBU (Left-Bottom-Up), FRD (Front-Right-Down)
 
-    arw: 0.3 # deg/sqrt(hr)
-    vrw: 0.3 # m/s/sqrt(hr)
-    gbstd: 1.0 # deg/hr
-    abstd: 100.0 # mGal
+    arw: 0.4 # deg/sqrt(hr)
+    vrw: 0.15 # m/s/sqrt(hr)
+    gbstd: 10.0 # deg/hr
+    abstd: 1000.0 # mGal
     corrtime: 1.0 # hr
 
     gb_prior_std: 10 # deg/hr
-    ab_prior_std: 100 # mGal
+    ab_prior_std: 5000 # mGal
 
 # 优化器
 optimizer:
@@ -50,12 +50,12 @@ visual:
     # 内参 [fx, fy, cx, cy(, skew)]
     # camera_model: kannala_brandt8
     # intrinsic: [440.649388026254, 440.72260540867956, 480.91099956843425, 264.8917872670275]
-    intrinsic: [453.2338984395232, 453.9874805035554, 474.2342341897385, 262.5080263581367]
+    intrinsic: [451.34073023825806, 451.9064183809128, 479.78019808966025, 257.82734789876633]
 
     # 畸变参数 [k1, k2, p1, p2(, k3)]
     # distortion: [0.03570125312090746, 0.05919836675086403, -0.04408173944557452,
     #     0.00939075185133261]
-    distortion: [0,0,0,0]
+    distortion: [-3.4259447448837164e-09,1.1282867918122256e-18,-0.0026242864498785714,0.00195194317000109,-2.649890195959425e-28]
 
     # 图像分辨率
     resolution: [960, 540]
@@ -64,8 +64,8 @@ visual:
     # true: q_b_c/t_b_c is calibrated in the raw IMU frame and will be converted to internal FRD.
     extrinsic_in_raw_imu_frame: true
     # q (x, y, z, w)
-    q_b_c: [-0.0007715832578182348, 0.7035697982085096, -0.7106158215244412, -0.0037547179996621945]
-    t_b_c: [0.009308296608726433, -0.006074866695436421, -0.002254441800894674]
+    q_b_c: [0.002416585476968828, -0.7052862821400451, 0.7089157927543835, 0.001954257692674749]
+    t_b_c: [0.020190683663038146, -0.053204329932253984, -0.0037557191496503262]
 
     # IMU和相机时间延时
     # t_b = t_c + td

@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     string config_file(args[1]);
 
     // 命令行参数控制日志输出到标准输出
-    bool logtostderr = false;
+    bool logtostderr = true;
     if (args.size() >= 3) {
         int res;
         if (absl::SimpleAtoi(args[2], &res)) {

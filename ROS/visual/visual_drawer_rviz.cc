@@ -27,12 +27,14 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+#include <chrono>
 #include <utility>
 
 VisualDrawerRviz::VisualDrawerRviz(rclcpp::Node::SharedPtr node)
     : is_finished_(false)
     , isframerdy_(false)
     , ismaprdy_(false)
+    , has_frame_(false)
     , node_(std::move(node)) {
 
     frame_id_      = "world";
@@ -58,22 +60,24 @@ void VisualDrawerRviz::run() {
     while (!is_finished_) {
         // 等待绘图更新信号
         std::unique_lock<std::mutex> lock(update_mutex_);
-        update_sem_.wait(lock);
+        update_sem_.wait_for(lock, std::chrono::milliseconds(100));
+
+        bool publish_frame = isframerdy_ || has_frame_;
+        bool publish_map   = ismaprdy_;
+        isframerdy_        = false;
+        ismaprdy_          = false;
+        lock.unlock();
 
         // 发布跟踪的图像
-        if (isframerdy_) {
+        if (publish_frame) {
             publishTrackingImage();
-
-            isframerdy_ = false;
         }
 
         // 发布轨迹和地图点
-        if (ismaprdy_) {
+        if (publish_map) {
             publishOdometry();
 
             publishMapPoints();
-
-            ismaprdy_ = false;
         }
     }
     LOGI << "Visual drawer thread is exited";
@@ -83,6 +87,7 @@ void VisualDrawerRviz::updateFrame(visual::VisualFrame::Ptr frame, const cv::Mat
     std::unique_lock<std::mutex> lock(image_mutex_);
 
     frame_ = frame;
+    has_frame_ = true;
     if (!undistorted_image.empty()) {
         undistorted_image.copyTo(undistorted_image_);
     } else {
@@ -109,8 +114,14 @@ void VisualDrawerRviz::updateTrackedRefPoints(vector<cv::Point2f> ref, vector<cv
 
 void VisualDrawerRviz::publishTrackingImage() {
     std::unique_lock<std::mutex> lock(image_mutex_);
+    if (!frame_) {
+        return;
+    }
 
     frame_->rawImage().copyTo(raw_image_);
+    if (raw_image_.empty()) {
+        return;
+    }
     if (!undistorted_image_.empty()) {
         undistorted_image_.copyTo(track_image_);
     } else {
