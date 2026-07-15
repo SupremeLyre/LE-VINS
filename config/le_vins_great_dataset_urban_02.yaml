@@ -1,7 +1,7 @@
 # Configuration file for LE-VINS
 
 # 结果输出路径
-outputpath: "/mnt/nvme1/datasets/GREAT-Dataset/campus-01/LE-VINS"
+outputpath: "/mnt/nvme1/datasets/GREAT-Dataset/urban-02/LE-VINS"
 is_make_outputdir: true
 
 # 是否开启可视化
@@ -16,7 +16,7 @@ ros:
 
     # 读取ROS包
     is_read_bag: true
-    bag_file: "/mnt/nvme1/datasets/GREAT-Dataset/campus-01/campus-01.bag2"
+    bag_file: "/mnt/nvme1/datasets/GREAT-Dataset/urban-02/urban-02.bag2"
 
 # IMU噪声建模参数
 imu:
@@ -24,13 +24,13 @@ imu:
     is_use_zupt: true # 使用零速检测和零速约束
     imu_orientation: "RFU" # IMU坐标系方向: LBU (Left-Bottom-Up), FRD (Front-Right-Down)
 
-    arw: 1.5 # deg/sqrt(hr), tuned against campus-01 ground truth
-    vrw: 1.2 # m/s/sqrt(hr), tuned against campus-01 ground truth
-    gbstd: 150.0 # deg/hr
-    abstd: 1500.0 # mGal
+    arw: 0.3 # deg/sqrt(hr)
+    vrw: 0.5 # m/s/sqrt(hr)
+    gbstd: 10.0 # deg/hr
+    abstd: 150.0 # mGal
     corrtime: 1.0 # hr
 
-    gb_prior_std: 500 # deg/hr, covers the measured startup gyro bias
+    gb_prior_std: 10 # deg/hr
     ab_prior_std: 10000 # mGal
 
 # 优化器
@@ -48,11 +48,11 @@ visual:
     track_max_features: 250 # 最大提取特征数量
 
     # 内参 [fx, fy, cx, cy(, skew)]
-    intrinsic: [1155.3798161925529, 1157.6537409838597, 514.5749725873566, 398.0837659988261]
+    intrinsic: [890.21388839, 889.56330572,512.88196119, 381.38486858]
 
     # 畸变参数 [k1, k2, p1, p2(, k3)]
-    distortion: [-0.08116121408175185, 0.3634445516554271, 0.00015894104082034115,
-        0.0007295381347354688]
+    distortion: [-0.13095809, 0.06640391, -0.00094794,
+        0.0003389]
 
     # 图像分辨率
     resolution: [1024, 768]
@@ -61,8 +61,8 @@ visual:
     # true: q_b_c/t_b_c is calibrated in the raw IMU frame and will be converted to internal FRD.
     extrinsic_in_raw_imu_frame: true
     # q (x, y, z, w)
-    q_b_c: [-0.701039936007847, -0.00315801794262976, 0.000220872323511978, 0.713114988105148]
-    t_b_c: [-0.153256, 0.195995, 0.0534916]
+    q_b_c: [ -0.702952467831933, 0.00184558374919113, 0.00188477071425863, 0.71123193785781]
+    t_b_c: [-1.222309800000000e-01, 6.451381700000000e-01, 2.037000000000000e-02]
 
     # IMU和相机时间延时
     # t_b = t_c + td
@@ -70,8 +70,8 @@ visual:
 
     # 激光相机外参 Pc = q_c_l * Pl + t_c_l
     # q (x, y, z, w)
-    q_c_l: [0.504301086945987, -0.495111782731031, 0.495719189978617, 0.504784331168213]
-    t_c_l: [0.2216462, -0.201056, -0.5229726]
+    q_c_l: [0.510235910097944, -0.482365249727858, 0.480684808408843, 0.525285823972489]
+    t_c_l: [0.126786084610248, -0.424216663887015, -0.331636803564811]
 
     # t_b = t_l + td
     td_b_l: 0.0
